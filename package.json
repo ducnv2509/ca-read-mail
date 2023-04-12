@@ -1,0 +1,23 @@
+{
+  "name": "ca-read-mail",
+  "version": "1.0.0",
+  "description": "",
+  "main": "ca-read-mail.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Ducnv72",
+  "license": "ISC",
+  "dependencies": {
+    "app-root-path": "^3.1.0",
+    "dotenv": "^16.0.3",
+    "kafkajs": "^2.2.4",
+    "mailparser": "^3.6.4",
+    "node-cron": "^3.0.2",
+    "node-imap": "^0.9.6",
+    "winston": "^3.8.2",
+    "winston-daily-rotate-file": "^4.7.1"
+  }
+}
