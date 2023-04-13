@@ -26,7 +26,6 @@ cron.schedule('*/0.3 * * * *', () => {
                 imap.search(['UNSEEN'], function (err, results) {
                     if (err) myLogger.info("This log UNSEEN %o", err);
 
-
                     try {
                         const f = imap.fetch(results, { bodies: '' });
                         f.on('message', function (msg, seqno) {
@@ -39,20 +38,30 @@ cron.schedule('*/0.3 * * * *', () => {
                                     let subject = parsed.subject
                                     let date = parsed.date
                                     let value = parsed.text.replace(/#/g, '\"');
+                                    console.log(value);
                                     let data = {
                                         from,
                                         subject,
-                                        date, content: JSON.parse(value)
+                                        date,
+                                        content: JSON.parse(value)
                                     }
                                     let value_convert = JSON.parse(value)
-                                    if (from == 'centreonnotify@srv.fis.vn' && value_convert.SVDInfo.REQUESTER == 'monitor@test.com' && value_convert.SVDInfo.TENANT == "FIS.DTCM") {
+                                    if (from == 'centreonnotify@srv.fis.vn' && value_convert.SVDInfo.REQUESTER == 'monitor@test.com' && value_convert.SVDInfo.TENANT == "TuNTC23_Test_Tenant_01") {
+                                        let description = [];
+                                        for (const [key, value] of Object.entries(value_convert)) {
+                                            description.push(key + ": " + value + "   ")
+                                        }
                                         Object.assign(data, {
-                                            "channel": "Monitor",
+                                            "description": description.toString(),
+                                            "channel": "0c202d55-df82-4322-bf90-8de684e1a6c7",
                                             "group": "TuNTC23_GroupSupport_L1",
-                                            "technician": "tunguyen.0497@gmail.com",
+                                            "technician": "tuntc02@fpt.com.vn",
                                             "priority": "9ad60e08-ae94-11ed-afa1-0242ac120002",
                                             "service": "b296f6a0-cc63-11ed-a775-ed9a75b07b12",
-                                            "sub_service": "f055ee40-cc65-11ed-a775-ed9a75b07b12",
+                                            "sub_service": "cc18f650-cc63-11ed-a775-ed9a75b07b12",
+                                            "channel": '0c202d55-df82-4322-bf90-8de684e1a6c7',
+                                            "type": "9ac4514c-ad20-11ed-afa1-0242ac120002",
+
                                         })
                                         await writeKafka(data)
                                     } else {
