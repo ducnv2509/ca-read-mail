@@ -18,7 +18,7 @@ const imap = new Imap({
 });
 
 
-cron.schedule('*/0.3 * * * *', () => {
+cron.schedule('*/3 * * * *', () => {
     imap.once('ready', function () {
         try {
             imap.openBox('INBOX', false, function (err, mailbox) {
@@ -48,6 +48,7 @@ cron.schedule('*/0.3 * * * *', () => {
                                     let value_convert = JSON.parse(value)
                                     if (from == 'centreonnotify@srv.fis.vn' && value_convert.SVDInfo.REQUESTER == 'monitor@test.com' && value_convert.SVDInfo.TENANT == "TuNTC23_Test_Tenant_01") {
                                         let description = [];
+                                        delete value_convert.SVDInfo
                                         for (const [key, value] of Object.entries(value_convert)) {
                                             description.push(key + ": " + value + "   ")
                                         }
