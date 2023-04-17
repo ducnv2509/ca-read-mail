@@ -3,7 +3,8 @@ import cron from 'node-cron'
 import dotenv from 'dotenv';
 import myLogger from './winstonLog/winston.js';
 import { simpleParser } from 'mailparser';
-import { writeKafka } from './producer.js';
+import { writeKafka } from './producer-ad.js';
+import { getLinkUpload, uploadFile } from './services/uploadFileBase64.js';
 
 
 dotenv.config();
@@ -46,6 +47,14 @@ cron.schedule('*/3 * * * *', () => {
                                         content: JSON.parse(value)
                                     }
                                     let value_convert = JSON.parse(value)
+                                    let object = []
+                                    for (let i = 0; i < parsed.attachments.length; i++) {
+                                        const e = parsed.attachments[i];
+                                        const getlink = await getLinkUpload(e.filename, e.contentType, 'TuNTC23_Test_Tenant_01', 'dung.nguyenxuan.ncc@gmail.com')
+                                        object.push(getlink.object)
+                                        console.log(object);
+                                        await uploadFile(getlink.upload, e.content, e.contentType)
+                                    }
                                     if (from == 'centreonnotify@srv.fis.vn' && value_convert.SVDInfo.REQUESTER == 'monitor@test.com' && value_convert.SVDInfo.TENANT == "TuNTC23_Test_Tenant_01") {
                                         let description = [];
                                         delete value_convert.SVDInfo
@@ -62,6 +71,7 @@ cron.schedule('*/3 * * * *', () => {
                                             "sub_service": "cc18f650-cc63-11ed-a775-ed9a75b07b12",
                                             "channel": '0c202d55-df82-4322-bf90-8de684e1a6c7',
                                             "type": "9ac4514c-ad20-11ed-afa1-0242ac120002",
+                                            "attachments": object
 
                                         })
                                         await writeKafka(data)
