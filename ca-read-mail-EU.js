@@ -1,106 +1,116 @@
-import Imap from 'node-imap';
-import cron from 'node-cron'
-import dotenv from 'dotenv';
-import myLogger from './winstonLog/winston.js';
-import { simpleParser } from 'mailparser';
-import { writeKafka } from './producer-eu.js';
+import axios from 'axios';
+import dotenv from 'dotenv'
+import { genToken } from './genToken.js';
 import { getLinkUpload, uploadFile } from './services/uploadFileBase64.js';
+import { writeKafka } from './producer-eu.js';
+import cron from 'node-cron'
+
+dotenv.config()
+
+cron.schedule('*/3 * * * *', async () => {
+    const token = await genToken();
+    let config = {
+        method: 'get',
+        maxBodyLength: Infinity,
+        url: `https://graph.microsoft.com/v1.0/users/${process.env.CA_READ_MAIL_MAIL_ID}/messages/?${process.env.CA_READ_MAIL_FILTER}`,
+        headers: {
+            'Authorization': 'Bearer ' + token
+        },
+    };
+    const result = await axios.request(config)
+
+    let config_update_isRead
+    let data_update = JSON.stringify({
+        "isRead": true
+    });
+    result.data.value.forEach(async e => {
+        if (e.hasAttachments == true) {
+
+            let config = {
+                method: 'get',
+                maxBodyLength: Infinity,
+                url: `https://graph.microsoft.com/v1.0/users/${process.env.CA_READ_MAIL_MAIL_ID}/messages/${e.id}/attachments`,
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            };
+
+            let config_info = {
+                method: 'get',
+                maxBodyLength: Infinity,
+                url: `https://graph.microsoft.com/v1.0/users/${process.env.CA_READ_MAIL_MAIL_ID}/messages/${e.id}`,
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            };
 
 
-dotenv.config();
-const imap = new Imap({
-    user: process.env.CA_READ_MAIL_USER_EU,
-    password: process.env.CA_READ_MAIL_PASSWORD_EU,
-    host: process.env.CA_READ_MAIL_HOST,
-    port: process.env.CA_READ_MAIL_PORT_IMAP,
-    authTimeout: 120000,
-    tls: false,
-    tlsOptions: { rejectUnauthorized: false },
-});
-
-
-cron.schedule('*/3 * * * *', () => {
-    imap.once('ready', function () {
-        try {
-            imap.openBox('INBOX', false, function (err, mailbox) {
-                if (err) myLogger.info("This log INBOX %o", err);
-                imap.search(['UNSEEN'], function (err, results) {
-                    if (err) myLogger.info("This log UNSEEN %o", err);
-
-                    try {
-                        const f = imap.fetch(results, { bodies: '' });
-                        f.on('message', function (msg, seqno) {
-                            myLogger.info(`Message #${seqno}:`);
-                            const prefix = `(#${seqno}) `;
-                            msg.on('body', function (stream, info) {
-                                simpleParser(stream, async (err, parsed) => {
-                                    // const {from, subject, textAsHtml, text} = parsed;
-                                    let from = parsed.from.value[0].address
-                                    let subject = parsed.subject
-                                    let date = parsed.date
-                                    let value = parsed.text
-                                    let object = []
-                                    for (let i = 0; i < parsed.attachments.length; i++) {
-                                        const e = parsed.attachments[i];
-                                        const getlink = await getLinkUpload(e.filename, e.contentType, 'TuNTC23_Test_Tenant_01', 'dung.nguyenxuan.ncc@gmail.com')
-                                        object.push(getlink.object)
-                                        console.log(object);
-                                        await uploadFile(getlink.upload, e.content, e.contentType)
-                                    }
-                                    let content = {
-                                        from,
-                                        name: subject,
-                                        date,
-                                        description: value,
-                                        attachments: object,
-                                        requester: from,
-                                        status: "2102d392-ad11-11ed-afa1-0242ac120002",
-                                        type: "9ac44878-ad20-11ed-afa1-0242ac120002",
-                                        channel: "3c24b94c-ae97-11ed-afa1-0242ac120002",
-                                        group: "TuNTC23_GroupSupport_L2",
-                                        technician: "tu.test.tuntc23@gmail.com",
-                                        priorities: "9ad60e08-ae94-11ed-afa1-0242ac120002",
-                                        service: "ed54ee40-da92-11ed-ba85-a944b6bc27f2"
-                                    }
-                                    await writeKafka(content)
-                                    // console.log(parsed);
-                                });
-                                // let buffer = '';
-                                // stream.on('data', function (chunk) {
-                                //     buffer += chunk.toString('utf8');
-                                // });
-                                // stream.on('end', function () {
-                                //     console.log(`${prefix}Body: ${buffer}`);
-                                // });
-                            });
-                            msg.once('attributes', function (attrs) {
-                                console.log(`${prefix}UID: ${attrs.uid}`);
-                                console.log(`${prefix}Flags: ${attrs.flags}`);
-                                const { uid } = attrs;
-                                imap.addFlags(uid, ['\\Seen'], () => {
-                                    // Mark the email as read after reading it
-                                    console.log('Marked as read!', uid);
-                                });
-                            });
-                            msg.once('end', function () {
-                                console.log(`${prefix}Finished`);
-                            });
-                        });
-                        f.once('error', function (err) {
-                            console.log('Fetch error: ' + err);
-                        });
-                        f.once('end', function () {
-                            console.log('Done fetching all messages.');
-                            imap.end();
-                        });
-                    } catch (error) {
-                        console.log("error %o", error);
-                    }
-                });
-            });
-        } catch (error) {
-            console.log(error);
+            const content = await axios.request(config)
+            const info = await axios.request(config_info)
+            let object = []
+            for (let i = 0; i < content.data.value.length; i++) {
+                const e = content.data.value[i];
+                const getlink = await getLinkUpload(e.name, e.contentType, 'TuNTC23_Test_Tenant_01', info.data.from.emailAddress.address)
+                object.push(getlink.object)
+                let data = {
+                    from: info.data.from.emailAddress.address,
+                    name: info.data.subject,
+                    date: info.data.sentDateTime,
+                    description: info.data.body.content,
+                    attachments: object,
+                    requester: info.data.from.emailAddress.address,
+                    status: "2102d392-ad11-11ed-afa1-0242ac120002",
+                    type: "9ac44878-ad20-11ed-afa1-0242ac120002",
+                    channel: "3c24b94c-ae97-11ed-afa1-0242ac120002",
+                    group: "TuNTC23_GroupSupport_L2",
+                    technician: "tu.test.tuntc23@gmail.com",
+                    priorities: "9ad60e08-ae94-11ed-afa1-0242ac120002",
+                    service: "ed54ee40-da92-11ed-ba85-a944b6bc27f2"
+                }
+                let buffer_content = Buffer.from(e.contentBytes, 'base64');
+                await uploadFile(getlink.upload, buffer_content, e.contentType)
+                await writeKafka(data)
+                config_update_isRead = {
+                    method: 'PATCH',
+                    maxBodyLength: Infinity,
+                    url: `https://graph.microsoft.com/v1.0/users/${process.env.CA_READ_MAIL_MAIL_ID}/messages/${e.id}`,
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    data: data_update
+                };
+                await axios.request(config_update_isRead)
+            }
+        } else {
+            config_update_isRead = {
+                method: 'patch',
+                maxBodyLength: Infinity,
+                url: `https://graph.microsoft.com/v1.0/users/${process.env.CA_READ_MAIL_MAIL_ID}/messages/${e.id}`,
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json'
+                },
+                data: data_update
+            };
+            let data = {
+                from: e.from.emailAddress.address,
+                name: e.subject,
+                date: e.sentDateTime,
+                description: e.body.content,
+                attachments: [],
+                requester: e.from.emailAddress.address,
+                status: "2102d392-ad11-11ed-afa1-0242ac120002",
+                type: "9ac44878-ad20-11ed-afa1-0242ac120002",
+                channel: "3c24b94c-ae97-11ed-afa1-0242ac120002",
+                group: "TuNTC23_GroupSupport_L2",
+                technician: "tu.test.tuntc23@gmail.com",
+                priorities: "9ad60e08-ae94-11ed-afa1-0242ac120002",
+                service: "ed54ee40-da92-11ed-ba85-a944b6bc27f2"
+            }
+            await writeKafka(data)
+            await axios.request(config_update_isRead)
         }
     });
-    imap.connect()
 })
+
