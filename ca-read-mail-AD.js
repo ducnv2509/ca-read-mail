@@ -19,7 +19,7 @@ const imap = new Imap({
 });
 
 
-cron.schedule('*/3 * * * *', () => {
+cron.schedule('*/1 * * * *', () => {
     imap.once('ready', function () {
         try {
             imap.openBox('INBOX', false, function (err, mailbox) {
